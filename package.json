@@ -10,7 +10,7 @@
   "scripts": {
     "build": "pnpm -r run build",
     "typecheck": "pnpm -r run typecheck",
-    "clean": "pnpm -r exec rm -rf dist"
+    "clean": "rm -rf dist"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["esbuild"]
