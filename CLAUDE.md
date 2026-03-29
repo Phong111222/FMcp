@@ -54,21 +54,26 @@ Every server in this repo follows the same structure in `src/index.ts`:
 
 ## API-Specific Notes
 
-### Trello (`trello/src/index.ts`) — 24 tools
+### Trello (`trello/src/index.ts`) — 24 tools (boards, lists, cards, checklists, comments)
 - Auth: `key` + `token` appended as URL query params to every request
 - **Mutations (POST/PUT) use query params, not JSON body** — Trello v1 ignores request bodies
 - `fields` param is a comma-delimited string: `fields=id,name,url`
 - Boolean values in query params must be strings: `"true"` / `"false"`
 - Never write to stdout after `server.connect()` — use `console.error` only
 
-### Bitbucket (`bitbucket/src/index.ts`) — 8 tools
+### Bitbucket (`bitbucket/src/index.ts`) — 13 tools
 - Auth: HTTP Basic Auth via `Authorization: Basic base64(username:apiToken)`
 - Env vars: `BITBUCKET_USERNAME`, `BITBUCKET_API_TOKEN`, `BITBUCKET_WORKSPACE`
 - `workspace` param on each tool is optional and defaults to the configured workspace
 - For multiple Bitbucket accounts, register the same server binary twice under different MCP server names with different env vars
+- PR diff endpoint returns raw text, not JSON — handled separately from `bitbucketFetch`
 
-### Jira (`jira/src/index.ts`) — stub only
-- Not yet implemented; contains one stub tool
+### Jira (`jira/src/index.ts`) — 26 tools
+- Auth: HTTP Basic Auth via `Authorization: Basic base64(email:apiToken)`
+- Env vars: `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`
+- API version: REST v3 (`/rest/api/3/...`)
+- **ADF format**: Jira v3 requires Atlassian Document Format for all text fields (comments, descriptions). Use the `adf(text)` helper to wrap plain text — never pass raw strings to body/description fields
+- `transition-issue` requires a transition ID — always call `get-transitions` first to find the correct ID
 
 ## Environment Variables
 

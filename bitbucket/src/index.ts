@@ -172,6 +172,134 @@ server.tool(
 );
 
 server.tool(
+  "get-pull-request-comments",
+  "Get all comments on a Bitbucket pull request",
+  {
+    repoSlug: z.string().describe("The repository slug"),
+    id: z.number().int().describe("The pull request ID"),
+    workspace: z.string().optional().describe("Override the default workspace slug"),
+  },
+  async ({ repoSlug, id, workspace: wsOverride }) => {
+    try {
+      const ws = wsOverride ?? workspace;
+      const data = await bitbucketFetch(
+        `/repositories/${ws}/${repoSlug}/pullrequests/${id}/comments?pagelen=50`
+      );
+      return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+    } catch (err) {
+      return errorContent(err);
+    }
+  }
+);
+
+server.tool(
+  "get-pull-request-diff",
+  "Get the diff of a Bitbucket pull request",
+  {
+    repoSlug: z.string().describe("The repository slug"),
+    id: z.number().int().describe("The pull request ID"),
+    workspace: z.string().optional().describe("Override the default workspace slug"),
+  },
+  async ({ repoSlug, id, workspace: wsOverride }) => {
+    try {
+      const ws = wsOverride ?? workspace;
+      const creds = Buffer.from(`${username}:${apiToken}`).toString("base64");
+      const res = await fetch(`${BASE}/repositories/${ws}/${repoSlug}/pullrequests/${id}/diff`, {
+        headers: { Authorization: `Basic ${creds}` },
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "(no body)");
+        throw new Error(`Bitbucket API ${res.status} ${res.statusText}: ${body}`);
+      }
+      const text = await res.text();
+      return { content: [{ type: "text" as const, text }] };
+    } catch (err) {
+      return errorContent(err);
+    }
+  }
+);
+
+server.tool(
+  "add-pull-request-comment",
+  "Add a comment to a Bitbucket pull request",
+  {
+    repoSlug: z.string().describe("The repository slug"),
+    id: z.number().int().describe("The pull request ID"),
+    text: z.string().describe("The comment text"),
+    workspace: z.string().optional().describe("Override the default workspace slug"),
+  },
+  async ({ repoSlug, id, text, workspace: wsOverride }) => {
+    try {
+      const ws = wsOverride ?? workspace;
+      const data = await bitbucketFetch(
+        `/repositories/${ws}/${repoSlug}/pullrequests/${id}/comments`,
+        {
+          method: "POST",
+          body: JSON.stringify({ content: { raw: text } }),
+        }
+      );
+      return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+    } catch (err) {
+      return errorContent(err);
+    }
+  }
+);
+
+server.tool(
+  "approve-pull-request",
+  "Approve a Bitbucket pull request",
+  {
+    repoSlug: z.string().describe("The repository slug"),
+    id: z.number().int().describe("The pull request ID"),
+    workspace: z.string().optional().describe("Override the default workspace slug"),
+  },
+  async ({ repoSlug, id, workspace: wsOverride }) => {
+    try {
+      const ws = wsOverride ?? workspace;
+      const data = await bitbucketFetch(
+        `/repositories/${ws}/${repoSlug}/pullrequests/${id}/approve`,
+        { method: "POST" }
+      );
+      return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+    } catch (err) {
+      return errorContent(err);
+    }
+  }
+);
+
+server.tool(
+  "merge-pull-request",
+  "Merge a Bitbucket pull request",
+  {
+    repoSlug: z.string().describe("The repository slug"),
+    id: z.number().int().describe("The pull request ID"),
+    message: z.string().optional().describe("Custom merge commit message"),
+    closeSourceBranch: z.boolean().optional().describe("Delete source branch after merge"),
+    mergeStrategy: z
+      .enum(["merge_commit", "squash", "fast_forward"])
+      .optional()
+      .describe("Merge strategy (default: merge_commit)"),
+    workspace: z.string().optional().describe("Override the default workspace slug"),
+  },
+  async ({ repoSlug, id, message, closeSourceBranch, mergeStrategy, workspace: wsOverride }) => {
+    try {
+      const ws = wsOverride ?? workspace;
+      const body: Record<string, unknown> = {};
+      if (message !== undefined) body["message"] = message;
+      if (closeSourceBranch !== undefined) body["close_source_branch"] = closeSourceBranch;
+      if (mergeStrategy !== undefined) body["merge_strategy"] = mergeStrategy;
+      const data = await bitbucketFetch(
+        `/repositories/${ws}/${repoSlug}/pullrequests/${id}/merge`,
+        { method: "POST", body: JSON.stringify(body) }
+      );
+      return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+    } catch (err) {
+      return errorContent(err);
+    }
+  }
+);
+
+server.tool(
   "list-branches",
   "List branches in a Bitbucket repository",
   {

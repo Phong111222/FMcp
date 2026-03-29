@@ -68,6 +68,18 @@ claude mcp add --transport stdio jira \
 
 Get credentials: Atlassian → Account settings → Security → API tokens
 
+**26 tools available:**
+
+| Group | Tools |
+|---|---|
+| Issues | `search-issues`, `get-issue`, `create-issue`, `update-issue`, `delete-issue` |
+| Transitions | `get-transitions`, `transition-issue` |
+| Comments | `get-comments`, `add-comment`, `update-comment`, `delete-comment` |
+| Worklogs | `get-worklogs`, `add-worklog`, `delete-worklog` |
+| Projects | `list-projects`, `get-project` |
+| Users | `get-user`, `search-users`, `get-current-user` |
+| Meta | `list-issue-types`, `list-priorities`, `list-labels`, `get-attachment`, `delete-attachment` |
+
 ---
 
 ## Verify
