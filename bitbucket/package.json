@@ -6,7 +6,7 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsup src/index.ts --format esm --target node22 --dts --out-dir ../dist/bitbucket --clean",
+    "build": "tsup",
     "dev": "tsx --env-file=.env watch src/index.ts",
     "start": "node --env-file=.env ../dist/bitbucket/index.js",
     "typecheck": "tsc --noEmit"
