@@ -1,0 +1,4 @@
+packages:
+  - 'bitbucket'
+  - 'jira'
+  - 'trello'

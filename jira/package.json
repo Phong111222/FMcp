@@ -1,0 +1,18 @@
+{
+  "name": "jira-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MCP server for Jira",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --target node22 --dts --out-dir dist --clean",
+    "dev": "tsx --env-file=.env watch src/index.ts",
+    "start": "node --env-file=.env dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0",
+    "zod": "^3.25.0"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "mcp-dir",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Monorepo for local MCP servers",
+  "engines": {
+    "node": ">=18",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "build": "pnpm -r run build",
+    "typecheck": "pnpm -r run typecheck",
+    "clean": "pnpm -r exec rm -rf dist"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.4.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  }
+}
