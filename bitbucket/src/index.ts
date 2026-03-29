@@ -3,35 +3,23 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 
 // ---------------------------------------------------------------------------
-// Auth — multi-account profiles
+// Auth — fail fast if credentials are missing
 // ---------------------------------------------------------------------------
 
-interface Profile {
-  username: string;
-  appPassword: string;
-  workspace: string;
-}
+const BITBUCKET_USERNAME  = process.env["BITBUCKET_USERNAME"];
+const BITBUCKET_API_TOKEN = process.env["BITBUCKET_API_TOKEN"];
+const BITBUCKET_WORKSPACE = process.env["BITBUCKET_WORKSPACE"];
 
-function loadProfile(n: string): Profile | null {
-  const username  = process.env[`BITBUCKET_ACCOUNT_${n}_USERNAME`];
-  const appPassword = process.env[`BITBUCKET_ACCOUNT_${n}_APP_PASSWORD`];
-  const workspace = process.env[`BITBUCKET_ACCOUNT_${n}_WORKSPACE`];
-  if (!username || !appPassword || !workspace) return null;
-  return { username, appPassword, workspace };
-}
-
-const profile1 = loadProfile("1");
-if (!profile1) {
+if (!BITBUCKET_USERNAME || !BITBUCKET_API_TOKEN || !BITBUCKET_WORKSPACE) {
   console.error(
-    "[bitbucket-mcp] Fatal: BITBUCKET_ACCOUNT_1_USERNAME, BITBUCKET_ACCOUNT_1_APP_PASSWORD, and BITBUCKET_ACCOUNT_1_WORKSPACE must be set."
+    "[bitbucket-mcp] Fatal: BITBUCKET_USERNAME, BITBUCKET_API_TOKEN, and BITBUCKET_WORKSPACE must be set."
   );
   process.exit(1);
 }
 
-const profile2 = loadProfile("2");
-
-const profiles: Record<string, Profile> = { "1": profile1 };
-if (profile2) profiles["2"] = profile2;
+const username: string  = BITBUCKET_USERNAME;
+const apiToken: string  = BITBUCKET_API_TOKEN;
+const workspace: string = BITBUCKET_WORKSPACE;
 
 // ---------------------------------------------------------------------------
 // HTTP helper
@@ -39,18 +27,9 @@ if (profile2) profiles["2"] = profile2;
 
 const BASE = "https://api.bitbucket.org/2.0";
 
-async function bitbucketFetch(
-  path: string,
-  account: string,
-  options?: RequestInit
-): Promise<unknown> {
-  const profile = profiles[account];
-  if (!profile) {
-    throw new Error(`Account "${account}" is not configured. Set BITBUCKET_ACCOUNT_${account}_* env vars.`);
-  }
-  const creds = Buffer.from(`${profile.username}:${profile.appPassword}`).toString("base64");
-  const url = `${BASE}${path}`;
-  const res = await fetch(url, {
+async function bitbucketFetch(path: string, options?: RequestInit): Promise<unknown> {
+  const creds = Buffer.from(`${username}:${apiToken}`).toString("base64");
+  const res = await fetch(`${BASE}${path}`, {
     ...options,
     headers: {
       Authorization: `Basic ${creds}`,
@@ -62,7 +41,6 @@ async function bitbucketFetch(
     const body = await res.text().catch(() => "(no body)");
     throw new Error(`Bitbucket API ${res.status} ${res.statusText}: ${body}`);
   }
-  // 204 No Content
   if (res.status === 204) return null;
   return res.json();
 }
@@ -78,19 +56,6 @@ function errorContent(err: unknown) {
     content: [{ type: "text" as const, text: message, isError: true }],
   };
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function workspaceFor(account: string, override?: string): string {
-  return override ?? profiles[account]?.workspace ?? "";
-}
-
-const accountParam = z
-  .enum(["1", "2"])
-  .default("1")
-  .describe('Which account to use: "1" (default) or "2"');
 
 // ---------------------------------------------------------------------------
 // Server
@@ -113,7 +78,7 @@ server.resource(
       {
         uri: uri.href,
         mimeType: "text/plain",
-        text: `Bitbucket MCP server. Configured accounts: ${Object.keys(profiles).join(", ")}`,
+        text: `Bitbucket MCP server. Workspace: ${workspace}`,
       },
     ],
   })
@@ -125,20 +90,18 @@ server.resource(
 
 server.tool(
   "list-repositories",
-  "List repositories in a Bitbucket workspace",
+  "List repositories in the configured Bitbucket workspace",
   {
-    account: accountParam,
     workspace: z
       .string()
       .optional()
-      .describe("Workspace slug — defaults to the account's configured workspace"),
+      .describe("Override the default workspace slug"),
   },
-  async ({ account, workspace }) => {
+  async ({ workspace: wsOverride }) => {
     try {
-      const ws = workspaceFor(account, workspace);
+      const ws = wsOverride ?? workspace;
       const data = await bitbucketFetch(
-        `/repositories/${ws}?fields=values.slug,values.name,values.full_name,values.description,values.is_private,values.updated_on&pagelen=50`,
-        account
+        `/repositories/${ws}?fields=values.slug,values.name,values.full_name,values.description,values.is_private,values.updated_on&pagelen=50`
       );
       return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
     } catch (err) {
@@ -151,17 +114,13 @@ server.tool(
   "get-repository",
   "Get details of a specific Bitbucket repository",
   {
-    account: accountParam,
     repoSlug: z.string().describe("The repository slug"),
-    workspace: z
-      .string()
-      .optional()
-      .describe("Workspace slug — defaults to the account's configured workspace"),
+    workspace: z.string().optional().describe("Override the default workspace slug"),
   },
-  async ({ account, repoSlug, workspace }) => {
+  async ({ repoSlug, workspace: wsOverride }) => {
     try {
-      const ws = workspaceFor(account, workspace);
-      const data = await bitbucketFetch(`/repositories/${ws}/${repoSlug}`, account);
+      const ws = wsOverride ?? workspace;
+      const data = await bitbucketFetch(`/repositories/${ws}/${repoSlug}`);
       return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
     } catch (err) {
       return errorContent(err);
@@ -173,23 +132,18 @@ server.tool(
   "list-pull-requests",
   "List pull requests in a Bitbucket repository",
   {
-    account: accountParam,
     repoSlug: z.string().describe("The repository slug"),
     state: z
       .enum(["OPEN", "MERGED", "DECLINED", "SUPERSEDED"])
       .default("OPEN")
       .describe("Filter PRs by state"),
-    workspace: z
-      .string()
-      .optional()
-      .describe("Workspace slug — defaults to the account's configured workspace"),
+    workspace: z.string().optional().describe("Override the default workspace slug"),
   },
-  async ({ account, repoSlug, state, workspace }) => {
+  async ({ repoSlug, state, workspace: wsOverride }) => {
     try {
-      const ws = workspaceFor(account, workspace);
+      const ws = wsOverride ?? workspace;
       const data = await bitbucketFetch(
-        `/repositories/${ws}/${repoSlug}/pullrequests?state=${state}&pagelen=50`,
-        account
+        `/repositories/${ws}/${repoSlug}/pullrequests?state=${state}&pagelen=50`
       );
       return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
     } catch (err) {
@@ -202,21 +156,14 @@ server.tool(
   "get-pull-request",
   "Get details of a specific Bitbucket pull request",
   {
-    account: accountParam,
     repoSlug: z.string().describe("The repository slug"),
     id: z.number().int().describe("The pull request ID"),
-    workspace: z
-      .string()
-      .optional()
-      .describe("Workspace slug — defaults to the account's configured workspace"),
+    workspace: z.string().optional().describe("Override the default workspace slug"),
   },
-  async ({ account, repoSlug, id, workspace }) => {
+  async ({ repoSlug, id, workspace: wsOverride }) => {
     try {
-      const ws = workspaceFor(account, workspace);
-      const data = await bitbucketFetch(
-        `/repositories/${ws}/${repoSlug}/pullrequests/${id}`,
-        account
-      );
+      const ws = wsOverride ?? workspace;
+      const data = await bitbucketFetch(`/repositories/${ws}/${repoSlug}/pullrequests/${id}`);
       return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
     } catch (err) {
       return errorContent(err);
@@ -228,19 +175,14 @@ server.tool(
   "list-branches",
   "List branches in a Bitbucket repository",
   {
-    account: accountParam,
     repoSlug: z.string().describe("The repository slug"),
-    workspace: z
-      .string()
-      .optional()
-      .describe("Workspace slug — defaults to the account's configured workspace"),
+    workspace: z.string().optional().describe("Override the default workspace slug"),
   },
-  async ({ account, repoSlug, workspace }) => {
+  async ({ repoSlug, workspace: wsOverride }) => {
     try {
-      const ws = workspaceFor(account, workspace);
+      const ws = wsOverride ?? workspace;
       const data = await bitbucketFetch(
-        `/repositories/${ws}/${repoSlug}/refs/branches?pagelen=50`,
-        account
+        `/repositories/${ws}/${repoSlug}/refs/branches?pagelen=50`
       );
       return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
     } catch (err) {
@@ -253,20 +195,15 @@ server.tool(
   "get-branch",
   "Get details of a specific branch in a Bitbucket repository",
   {
-    account: accountParam,
     repoSlug: z.string().describe("The repository slug"),
     name: z.string().describe("The branch name"),
-    workspace: z
-      .string()
-      .optional()
-      .describe("Workspace slug — defaults to the account's configured workspace"),
+    workspace: z.string().optional().describe("Override the default workspace slug"),
   },
-  async ({ account, repoSlug, name, workspace }) => {
+  async ({ repoSlug, name, workspace: wsOverride }) => {
     try {
-      const ws = workspaceFor(account, workspace);
+      const ws = wsOverride ?? workspace;
       const data = await bitbucketFetch(
-        `/repositories/${ws}/${repoSlug}/refs/branches/${encodeURIComponent(name)}`,
-        account
+        `/repositories/${ws}/${repoSlug}/refs/branches/${encodeURIComponent(name)}`
       );
       return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
     } catch (err) {
@@ -279,21 +216,17 @@ server.tool(
   "list-commits",
   "List commits in a Bitbucket repository",
   {
-    account: accountParam,
     repoSlug: z.string().describe("The repository slug"),
     branch: z.string().optional().describe("Filter commits by branch name"),
-    workspace: z
-      .string()
-      .optional()
-      .describe("Workspace slug — defaults to the account's configured workspace"),
+    workspace: z.string().optional().describe("Override the default workspace slug"),
   },
-  async ({ account, repoSlug, branch, workspace }) => {
+  async ({ repoSlug, branch, workspace: wsOverride }) => {
     try {
-      const ws = workspaceFor(account, workspace);
+      const ws = wsOverride ?? workspace;
       const path = branch
         ? `/repositories/${ws}/${repoSlug}/commits/${encodeURIComponent(branch)}?pagelen=30`
         : `/repositories/${ws}/${repoSlug}/commits?pagelen=30`;
-      const data = await bitbucketFetch(path, account);
+      const data = await bitbucketFetch(path);
       return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
     } catch (err) {
       return errorContent(err);
@@ -305,19 +238,14 @@ server.tool(
   "list-pipelines",
   "List recent pipelines in a Bitbucket repository",
   {
-    account: accountParam,
     repoSlug: z.string().describe("The repository slug"),
-    workspace: z
-      .string()
-      .optional()
-      .describe("Workspace slug — defaults to the account's configured workspace"),
+    workspace: z.string().optional().describe("Override the default workspace slug"),
   },
-  async ({ account, repoSlug, workspace }) => {
+  async ({ repoSlug, workspace: wsOverride }) => {
     try {
-      const ws = workspaceFor(account, workspace);
+      const ws = wsOverride ?? workspace;
       const data = await bitbucketFetch(
-        `/repositories/${ws}/${repoSlug}/pipelines/?sort=-created_on&pagelen=20`,
-        account
+        `/repositories/${ws}/${repoSlug}/pipelines/?sort=-created_on&pagelen=20`
       );
       return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
     } catch (err) {
@@ -333,10 +261,7 @@ server.tool(
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  const accountList = Object.keys(profiles)
-    .map((k) => `account ${k} (${profiles[k]!.workspace})`)
-    .join(", ");
-  console.error(`[bitbucket-mcp] Server started on stdio — ${accountList}`);
+  console.error(`[bitbucket-mcp] Server started on stdio — workspace: ${workspace}`);
 }
 
 main().catch((err) => {
