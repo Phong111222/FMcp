@@ -6,9 +6,9 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsup src/index.ts --format esm --target node22 --dts --out-dir dist --clean",
+    "build": "tsup src/index.ts --format esm --target node22 --dts --out-dir ../dist/jira --clean",
     "dev": "tsx --env-file=.env watch src/index.ts",
-    "start": "node --env-file=.env dist/index.js",
+    "start": "node --env-file=.env ../dist/jira/index.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
