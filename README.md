@@ -82,6 +82,41 @@ Get credentials: Atlassian → Account settings → Security → API tokens
 
 ---
 
+## Using machine environment variables
+
+Instead of hardcoding credentials in the `claude mcp add` command, export them in `~/.zshrc` and let the shell expand them:
+
+```bash
+# ~/.zshrc
+export TRELLO_API_KEY=your-api-key
+export TRELLO_TOKEN=your-token
+
+export BITBUCKET_USERNAME=your-email@example.com
+export BITBUCKET_API_TOKEN=your-api-token
+export BITBUCKET_WORKSPACE=your-workspace-slug
+
+export JIRA_BASE_URL=https://yourcompany.atlassian.net
+export JIRA_EMAIL=your-email@example.com
+export JIRA_API_TOKEN=your-api-token
+```
+
+Then reload your shell:
+
+```bash
+source ~/.zshrc
+```
+
+Now use `$VAR_NAME` in `claude mcp add` — the shell substitutes the values automatically:
+
+```bash
+claude mcp add --transport stdio trello \
+  --env TRELLO_API_KEY=$TRELLO_API_KEY \
+  --env TRELLO_TOKEN=$TRELLO_TOKEN \
+  -- node /absolute/path/to/mcp-dir/dist/trello/index.js
+```
+
+---
+
 ## Verify
 
 ```bash
