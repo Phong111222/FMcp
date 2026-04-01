@@ -246,6 +246,88 @@ server.tool(
 );
 
 server.tool(
+  "get-pull-request-diffstat",
+  "Get the list of changed files in a Bitbucket pull request (useful for code review)",
+  {
+    repoSlug: z.string().describe("The repository slug"),
+    id: z.number().int().describe("The pull request ID"),
+    workspace: z.string().optional().describe("Override the default workspace slug"),
+  },
+  async ({ repoSlug, id, workspace: wsOverride }) => {
+    try {
+      const ws = wsOverride ?? workspace;
+      const data = await bitbucketFetch(
+        `/repositories/${ws}/${repoSlug}/pullrequests/${id}/diffstat?pagelen=100`
+      );
+      return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+    } catch (err) {
+      return errorContent(err);
+    }
+  }
+);
+
+server.tool(
+  "add-pull-request-inline-comment",
+  "Add an inline comment on a specific file and line in a Bitbucket pull request",
+  {
+    repoSlug: z.string().describe("The repository slug"),
+    id: z.number().int().describe("The pull request ID"),
+    text: z.string().describe("The comment text"),
+    filePath: z.string().describe("The file path to comment on"),
+    line: z.number().int().describe("The line number to comment on"),
+    workspace: z.string().optional().describe("Override the default workspace slug"),
+  },
+  async ({ repoSlug, id, text, filePath, line, workspace: wsOverride }) => {
+    try {
+      const ws = wsOverride ?? workspace;
+      const data = await bitbucketFetch(
+        `/repositories/${ws}/${repoSlug}/pullrequests/${id}/comments`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            content: { raw: text },
+            inline: { path: filePath, to: line },
+          }),
+        }
+      );
+      return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+    } catch (err) {
+      return errorContent(err);
+    }
+  }
+);
+
+server.tool(
+  "reply-pull-request-comment",
+  "Reply to an existing comment on a Bitbucket pull request",
+  {
+    repoSlug: z.string().describe("The repository slug"),
+    id: z.number().int().describe("The pull request ID"),
+    parentCommentId: z.number().int().describe("The ID of the comment to reply to"),
+    text: z.string().describe("The reply text"),
+    workspace: z.string().optional().describe("Override the default workspace slug"),
+  },
+  async ({ repoSlug, id, parentCommentId, text, workspace: wsOverride }) => {
+    try {
+      const ws = wsOverride ?? workspace;
+      const data = await bitbucketFetch(
+        `/repositories/${ws}/${repoSlug}/pullrequests/${id}/comments`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            content: { raw: text },
+            parent: { id: parentCommentId },
+          }),
+        }
+      );
+      return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+    } catch (err) {
+      return errorContent(err);
+    }
+  }
+);
+
+server.tool(
   "approve-pull-request",
   "Approve a Bitbucket pull request",
   {
@@ -291,6 +373,33 @@ server.tool(
       const data = await bitbucketFetch(
         `/repositories/${ws}/${repoSlug}/pullrequests/${id}/merge`,
         { method: "POST", body: JSON.stringify(body) }
+      );
+      return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+    } catch (err) {
+      return errorContent(err);
+    }
+  }
+);
+
+server.tool(
+  "update-pull-request",
+  "Update the title or description of a Bitbucket pull request",
+  {
+    repoSlug: z.string().describe("The repository slug"),
+    id: z.number().int().describe("The pull request ID"),
+    title: z.string().optional().describe("New title for the pull request"),
+    description: z.string().optional().describe("New description for the pull request"),
+    workspace: z.string().optional().describe("Override the default workspace slug"),
+  },
+  async ({ repoSlug, id, title, description, workspace: wsOverride }) => {
+    try {
+      const ws = wsOverride ?? workspace;
+      const body: Record<string, unknown> = {};
+      if (title !== undefined) body["title"] = title;
+      if (description !== undefined) body["description"] = description;
+      const data = await bitbucketFetch(
+        `/repositories/${ws}/${repoSlug}/pullrequests/${id}`,
+        { method: "PUT", body: JSON.stringify(body) }
       );
       return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
     } catch (err) {
